@@ -96,9 +96,7 @@ pecho() {
 # F13-F20: just running read and pressing F13 through F20. F21-24 don't print escape sequences
 fnKeys=('^[OP' '^[OQ' '^[OR' '^[OS' '^[[15~' '^[[17~' '^[[18~' '^[[19~' '^[[20~' '^[[21~' '^[[23~' '^[[24~' '^[[1;2P' '^[[1;2Q' '^[[1;2R' '^[[1;2S' '^[[15;2~' '^[[17;2~' '^[[18;2~' '^[[19;2~')
 touchBarState=''
-npmScripts=()
 gitBranches=()
-lastPackageJsonPath=''
 
 function _clearTouchbar() {
   pecho "\033]1337;PopKeyLabels\a"
@@ -159,71 +157,41 @@ function _displayDefault() {
     setKey 3 $touchbarIndicators "git status"
     setKey 4 "🔼 push" "git push origin $(git_current_branch)"
     setKey 5 "🔽 pull" "git pull origin $(git_current_branch)"
+    setKey 6 "📜 log" "git log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit --all"
+    setKey 7 "💣 reset" "git reset HEAD --hard & git clean -fd"
   else
     clearKey 2
     clearKey 3
     clearKey 4
     clearKey 5
+    clearKey 6
+    clearKey 7
   fi
+
+  fnKeysIndex=7
 
   # PACKAGE.JSON
   # ------------
-  if [[ $(find-up package.json) != "" ]]; then
-      if [[ $(find-up yarn.lock) != "" ]] && [[ "$YARN_ENABLED" = true ]]; then
-          setKey 6 "🐱 yarn-run" _displayYarnScripts '-q'
-      else
-          setKey 6 "⚡️ npm-run" _displayNpmScripts '-q'
-    fi
-  else
-      clearKey 6
-  fi
-}
-
-function _displayNpmScripts() {
-  # find available npm run scripts only if new directory
-  if [[ $lastPackageJsonPath != $(find-up package.json) ]]; then
-    lastPackageJsonPath=$(find-up package.json)
-    npmScripts=($(node -e "console.log(Object.keys($(npm run --json)).sort((a, b) => a.localeCompare(b)).filter((name, idx) => idx < 19).join(' '))"))
-  fi
-
-  _clearTouchbar
-  _unbindTouchbar
-
-  touchBarState='npm'
-
-  fnKeysIndex=1
-  for npmScript in "$npmScripts[@]"; do
+#  if [[ $(find-up package.json) != "" ]]; then
+#      if [[ $(find-up yarn.lock) != "" ]] && [[ "$YARN_ENABLED" = true ]]; then
+#          setKey 6 "🐱 yarn-run" _displayYarnScripts '-q'
+#      else
+#          setKey 6 "⚡️ npm-run" _displayNpmScripts '-q'
+#    fi
+#  else
+#      clearKey 6
+#  fi
+  # DOCKER-COMPOSE.yaml
+  # ------------
+  if test -e docker-compose.yaml || test -e docker-compose.yml; then
+      setKey "$fnKeysIndex" "🐳 docker" _displayDockerComposerOptions '-q'
     fnKeysIndex=$((fnKeysIndex + 1))
-    setKey $fnKeysIndex $npmScript "npm run $npmScript"
-  done
-
-  setKey 1 "👈 back" _displayDefault '-q'
-}
-
-function _displayYarnScripts() {
-  # find available yarn run scripts only if new directory
-  if [[ $lastPackageJsonPath != $(find-up package.json) ]]; then
-    lastPackageJsonPath=$(find-up package.json)
-    yarnScripts=($(node -e "console.log([$(yarn run --json 2>>/dev/null | tr '\n' ',')].find(line => line && line.type === 'list' && line.data && line.data.type === 'possibleCommands').data.items.sort((a, b) => a.localeCompare(b)).filter((name, idx) => idx < 19).join(' '))"))
   fi
-
-  _clearTouchbar
-  _unbindTouchbar
-
-  touchBarState='yarn'
-
-  fnKeysIndex=1
-  for yarnScript in "$yarnScripts[@]"; do
-    fnKeysIndex=$((fnKeysIndex + 1))
-    setKey $fnKeysIndex $yarnScript "yarn run $yarnScript"
-  done
-
-  setKey 1 "👈 back" _displayDefault '-q'
 }
 
 function _displayBranches() {
   # List of branches for current repo
-  gitBranches=($(node -e "console.log('$(echo $(git branch))'.split(/[ ,]+/).toString().split(',').join(' ').toString().replace('* ', ''))"))
+  gitBranches=($(echo $(git branch | tr '\\n' ','|sed s/\[,\*\]//g|tr -s " " |sed s/^\ //g)))
 
   _clearTouchbar
   _unbindTouchbar
@@ -256,21 +224,36 @@ function _displayPath() {
   setKey 1 "👈 back" _displayDefault '-q'
 }
 
+_displayDockerComposerOptions(){
+     _clearTouchbar
+     _unbindTouchbar
+
+     touchBarState='dockerComposerOptions'
+
+     fnKeysIndex=1
+     local cmds=(up stop down build)
+
+     for cmd in $cmds; do
+
+         fnKeysIndex=$((fnKeysIndex + 1))
+        setKey "$fnKeysIndex" $cmd "docker-compose $cmd"
+     done
+
+     setKey 1 "👈 back" _displayDefault '-q'
+}
+
 zle -N _displayDefault
-zle -N _displayNpmScripts
-zle -N _displayYarnScripts
 zle -N _displayBranches
 zle -N _displayPath
+zle -N _displayDockerComposerOptions
 
 precmd_iterm_touchbar() {
-  if [[ $touchBarState == 'npm' ]]; then
-    _displayNpmScripts
-  elif [[ $touchBarState == 'yarn' ]]; then
-    _displayYarnScripts
-  elif [[ $touchBarState == 'github' ]]; then
+  if [[ $touchBarState == 'github' ]]; then
     _displayBranches
   elif [[ $touchBarState == 'path' ]]; then
     _displayPath
+  elif [[ $touchBarState == 'dockerComposerOptions' ]]; then
+    _displayDockerComposerOptions
   else
     _displayDefault
   fi
