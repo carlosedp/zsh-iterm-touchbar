@@ -136,6 +136,7 @@ function _displayDefault() {
   # ---
   # Check if the current directory is a git repository and not the .git directory
   if [[ "$TOUCHBAR_GIT_ENABLED" = true ]] &&
+    [[ $SSH_CONNECTION == "" ]] &&          # Disable plugin on SSH connections
     git rev-parse --is-inside-work-tree &>/dev/null &&
     [[ "$(git rev-parse --is-inside-git-dir 2> /dev/null)" == 'false' ]]; then
 
